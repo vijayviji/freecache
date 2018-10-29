@@ -144,12 +144,22 @@ func (rb *RingBuf) EqualAt(p []byte, off int64) bool {
 		return bytes.Equal(p, rb.data[readOff:readEnd])
 	} else {
 		firstLen := len(rb.data) - readOff
+		assertF(firstLen >= 0 && firstLen <= len(p) &&
+			readOff >= 0 && readOff <= len(rb.data),
+			"firstLen:%d pLen:%d readOff:%d dataLen:%d", firstLen, len(p), readOff, len(rb.data))
 		equal := bytes.Equal(p[:firstLen], rb.data[readOff:])
 		if equal {
 			secondLen := len(p) - firstLen
 			equal = bytes.Equal(p[firstLen:], rb.data[:secondLen])
 		}
 		return equal
+	}
+}
+
+func assertF(v bool, fmtStr string, args ...interface{}) {
+	if !v {
+		msg := fmt.Sprintf(fmtStr, args...)
+		panic(msg)
 	}
 }
 
