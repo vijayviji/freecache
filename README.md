@@ -73,3 +73,9 @@ Each segment has its own lock, so it supports high concurrent access.
 ## License
 
 The MIT License
+
+## How to Test
+`$> go test`
+
+## How to run benchmark
+`$> go test -bench .`

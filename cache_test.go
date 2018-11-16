@@ -12,6 +12,66 @@ import (
 	"time"
 )
 
+func TestCache_Incr(t *testing.T) {
+	cache := NewCache(1024)
+	key := []byte("Hello")
+
+	// Test 1
+	valueBytes, err := cache.Incr(key, "UINT64", 0)
+	if err != nil {
+		t.Error("err should be nil. ", err)
+	}
+
+	valueUint64 := binary.LittleEndian.Uint64(valueBytes)
+	if valueUint64 != 1 {
+		t.Error("INCR failed. Wrong value. ", valueUint64)
+	}
+
+	// Test 2
+	key = []byte("Hello1")
+	valueBytes, err = cache.Incr(key, "INT32", 0)
+	if err != nil {
+		t.Error("err should be nil. ", err)
+	}
+
+	valueUint32 := binary.LittleEndian.Uint32(valueBytes)
+	valueInt32 := uint32(valueUint32)
+
+	if valueInt32 != 1 {
+		t.Error("INCR failed. Wrong value. ", valueInt32)
+	}
+}
+
+func TestCache_GetAndSetAndIncrValueInt(t *testing.T) {
+	cache := NewCache(1024)
+	key := []byte("Hello")
+
+	var valueUint64 uint64 = 12345678
+	var valueCopyUint64 uint64
+
+	err := cache.SetValueInt(key, valueUint64, 0)
+	if err != nil {
+		t.Error("err should be nil. ", err)
+	}
+
+	tmp, err := cache.GetValueInt(key)
+	valueCopyUint64 = tmp.(uint64)
+
+	if valueUint64 != valueCopyUint64 {
+		t.Error("Test failed. ", valueUint64, valueCopyUint64)
+	}
+
+	valueBytes, err := cache.Incr(key, "UINT64", 0)
+	if err != nil {
+		t.Error("err should be nil. ", err)
+	}
+
+	valueCopy2Uint64 := binary.LittleEndian.Uint64(valueBytes)
+	if valueCopy2Uint64 != (valueUint64 + 1) {
+		t.Error("INCR failed. Wrong value. ", valueCopy2Uint64)
+	}
+}
+
 func TestFreeCache(t *testing.T) {
 	cache := NewCache(1024)
 	if cache.HitRate() != 0 {
@@ -522,6 +582,24 @@ func BenchmarkCacheGet(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		binary.LittleEndian.PutUint64(key[:], uint64(i))
 		cache.Get(key[:])
+	}
+}
+
+func BenchmarkCache_IncrUint64(b *testing.B) {
+	cache := NewCache(256 * 1024 * 1024)
+	var key [8]byte
+	for i := 0; i < b.N; i++ {
+		binary.LittleEndian.PutUint64(key[:], uint64(i))
+		cache.Incr(key[:], "UINT64", 10, )
+	}
+}
+
+func BenchmarkCache_IncrInt32(b *testing.B) {
+	cache := NewCache(256 * 1024 * 1024)
+	var key [8]byte
+	for i := 0; i < b.N; i++ {
+		binary.LittleEndian.PutUint64(key[:], uint64(i))
+		cache.Incr(key[:], "INT32", 10, )
 	}
 }
 
