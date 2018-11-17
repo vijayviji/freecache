@@ -17,27 +17,19 @@ func TestCache_Incr(t *testing.T) {
 	key := []byte("Hello")
 
 	// Test 1
-	valueBytes, err := cache.Incr(key, "UINT64", 0)
+	valueUint64, err := cache.IncrValueInt(key, "UINT64", 0)
 	if err != nil {
 		t.Error("err should be nil. ", err)
-	}
-
-	valueUint64 := binary.LittleEndian.Uint64(valueBytes)
-	if valueUint64 != 1 {
+	} else if valueUint64 != uint64(1) {
 		t.Error("INCR failed. Wrong value. ", valueUint64)
 	}
 
 	// Test 2
 	key = []byte("Hello1")
-	valueBytes, err = cache.Incr(key, "INT32", 0)
+	valueInt32, err := cache.IncrValueInt(key, "INT32", 0)
 	if err != nil {
 		t.Error("err should be nil. ", err)
-	}
-
-	valueUint32 := binary.LittleEndian.Uint32(valueBytes)
-	valueInt32 := uint32(valueUint32)
-
-	if valueInt32 != 1 {
+	} else if valueInt32 != int32(1) {
 		t.Error("INCR failed. Wrong value. ", valueInt32)
 	}
 }
@@ -47,28 +39,27 @@ func TestCache_GetAndSetAndIncrValueInt(t *testing.T) {
 	key := []byte("Hello")
 
 	var valueUint64 uint64 = 12345678
-	var valueCopyUint64 uint64
 
 	err := cache.SetValueInt(key, valueUint64, 0)
 	if err != nil {
 		t.Error("err should be nil. ", err)
 	}
 
-	tmp, err := cache.GetValueInt(key)
-	valueCopyUint64 = tmp.(uint64)
-
+	valueCopyUint64, err := cache.GetValueInt(key)
 	if valueUint64 != valueCopyUint64 {
 		t.Error("Test failed. ", valueUint64, valueCopyUint64)
 	}
 
-	valueBytes, err := cache.Incr(key, "UINT64", 0)
+	valueCopy2Uint64, err := cache.IncrValueInt(key, "UINT64", 0)
 	if err != nil {
 		t.Error("err should be nil. ", err)
+	} else if valueCopy2Uint64 != (valueUint64 + 1) {
+		t.Error("INCR failed. Wrong value. ", valueCopy2Uint64)
 	}
 
-	valueCopy2Uint64 := binary.LittleEndian.Uint64(valueBytes)
-	if valueCopy2Uint64 != (valueUint64 + 1) {
-		t.Error("INCR failed. Wrong value. ", valueCopy2Uint64)
+	valueCopy3Uint64, err := cache.GetValueInt(key)
+	if valueCopy3Uint64 != valueCopy2Uint64 {
+		t.Error("GET after INCR failed. Wrong Value. ", valueCopy3Uint64)
 	}
 }
 
@@ -590,7 +581,7 @@ func BenchmarkCache_IncrUint64(b *testing.B) {
 	var key [8]byte
 	for i := 0; i < b.N; i++ {
 		binary.LittleEndian.PutUint64(key[:], uint64(i))
-		cache.Incr(key[:], "UINT64", 10, )
+		cache.IncrValueInt(key[:], "UINT64", 10, )
 	}
 }
 
@@ -599,7 +590,7 @@ func BenchmarkCache_IncrInt32(b *testing.B) {
 	var key [8]byte
 	for i := 0; i < b.N; i++ {
 		binary.LittleEndian.PutUint64(key[:], uint64(i))
-		cache.Incr(key[:], "INT32", 10, )
+		cache.IncrValueInt(key[:], "INT32", 10, )
 	}
 }
 

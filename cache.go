@@ -124,37 +124,37 @@ func (cache *Cache) DelInt(key int64) (affected bool) {
 	return cache.Del(bKey[:])
 }
 
-func incrValue(valueBytes []byte, valueType string) ([]byte, error) {
+func incrValue(valueBytes []byte, valueType string) (interface{}, []byte, error) {
 	switch valueType {
 	case "UINT64":
 		valueBytes64 := [8]byte{}
 		valueUInt64 := binary.LittleEndian.Uint64(valueBytes)
 		valueUInt64++
 		binary.LittleEndian.PutUint64(valueBytes64[:], valueUInt64)
-		return valueBytes64[:], nil
+		return valueUInt64, valueBytes64[:], nil
 	case "UINT32":
 		valueBytes32 := [4]byte{}
 		valueUInt32 := binary.LittleEndian.Uint32(valueBytes)
 		valueUInt32++
 		binary.LittleEndian.PutUint32(valueBytes32[:], valueUInt32)
-		return valueBytes32[:], nil
+		return valueUInt32, valueBytes32[:], nil
 	case "INT64":
 		valueBytes64 := [8]byte{}
 		valueInt64 := int64(binary.LittleEndian.Uint64(valueBytes))
 		valueInt64++
 		binary.LittleEndian.PutUint64(valueBytes64[:], uint64(valueInt64))
-		return valueBytes64[:], nil
+		return valueInt64, valueBytes64[:], nil
 	case "INT32":
 		valueBytes32 := [4]byte{}
 		valueInt32 := int32(binary.LittleEndian.Uint32(valueBytes))
 		valueInt32++
 		binary.LittleEndian.PutUint32(valueBytes32[:], uint32(valueInt32))
-		return valueBytes32[:], nil
+		return valueInt32, valueBytes32[:], nil
 	default:
-		return nil, errors.New("Type Not Supported")
+		return nil, nil, errors.New("Type Not Supported")
 	}
 
-	return valueBytes, nil
+	return nil, valueBytes, nil
 }
 
 func newValueBytes(valueType string) ([]byte) {
@@ -212,29 +212,28 @@ func (cache *Cache) GetValueInt(key []byte) (interface{}, error) {
 
 // Increments the value, assuming the value is an integer.
 // Type of the integer is mentioned in valueType param, which could be any of {"UINT64", "UINT32", "INT64", "INT32"}
-func (cache *Cache) Incr(key []byte, valueType string, expireSeconds int) ([]byte, error) {
+// returns in numeric type
+func (cache *Cache) IncrValueInt(key []byte, valueType string, expireSeconds int) (interface{}, error) {
 	hashVal := hashFunc(key)
 	segID := hashVal & segmentAndOpVal
 	cache.locks[segID].Lock()
+	defer cache.locks[segID].Unlock()
 
 	valueBytes, _, err := cache.segments[segID].get(key, hashVal)
 	if err == ErrNotFound {
 		// key doesn't exist. Create a new value with 0 as value.
 		valueBytes = newValueBytes(valueType)
 	} else if err != nil {
-		cache.locks[segID].Unlock()
 		return nil, err
 	}
 
-	valueBytes, err = incrValue(valueBytes, valueType)
+	valueNum, valueBytes, err := incrValue(valueBytes, valueType)
 	if err != nil {
-		cache.locks[segID].Unlock()
 		return nil, err
 	}
 
 	err = cache.segments[segID].set(key, valueBytes, hashVal, expireSeconds)
-	cache.locks[segID].Unlock()
-	return valueBytes, err
+	return valueNum, err
 }
 
 // EvacuateCount is a metric indicating the number of times an eviction occurred.
