@@ -34,6 +34,32 @@ func TestCache_Incr(t *testing.T) {
 	}
 }
 
+func TestCache_IncrExpire(t *testing.T) {
+	cache := NewCache(1024)
+	key := []byte("Hello")
+	oldValue := uint64(0)
+
+	for i := 0; i < 10; i++ {
+		// setting 10 seconds on every INCR shouldn't matter. Only first time matters.
+		newValue, err := cache.IncrValueInt(key, "UINT64", 10)
+		if err != nil {
+			t.Error("Iteration: ", i, "err should be nil. ", err)
+		} else if newValue != (oldValue + 1) {
+			t.Error("Iteration: ", i, "INCR failed. Wrong value. ", newValue, ". Expected: ", oldValue + 1)
+		}
+
+		oldValue = newValue.(uint64)
+		time.Sleep(time.Second)
+	}
+
+	newValue, err := cache.IncrValueInt(key, "UINT64", 10)
+	if err != nil {
+		t.Error("Iteration: err should be nil. ", err)
+	} else if newValue != uint64(1) {
+		t.Error("Test failed. Expected: 1. Got: ", newValue)
+	}
+}
+
 func TestCache_GetAndSetAndIncrValueInt(t *testing.T) {
 	cache := NewCache(1024)
 	key := []byte("Hello")

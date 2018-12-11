@@ -64,6 +64,25 @@ func newSegment(bufSize int, segId int) (seg segment) {
 	return
 }
 
+// If expireSeconds is <= 0, then we use existingExpireAt value. Similar for other conditions.
+func calculateExpireAt(now uint32, expireSeconds int, existingExpireAt uint32) (uint32) {
+	var expireAt uint32
+
+	switch true {
+	case expireSeconds < 0:
+		expireAt = existingExpireAt
+	case expireSeconds == 0:
+		expireAt = 0
+	case expireSeconds > 0:
+		expireAt = now + uint32(expireSeconds)
+	}
+
+	return expireAt
+}
+
+// if expireSeconds < 0 and if the key already exists, it will use the existing expireSeconds
+// if expireSeconds == 0, then key won't have expire time
+// if expireSeconds > 0, then the key will expire after expireSeconds
 func (seg *segment) set(key, value []byte, hashVal uint64, expireSeconds int) (err error) {
 	if len(key) > 65535 {
 		return ErrLargeKey
@@ -73,11 +92,8 @@ func (seg *segment) set(key, value []byte, hashVal uint64, expireSeconds int) (e
 		// Do not accept large entry.
 		return ErrLargeEntry
 	}
+
 	now := uint32(time.Now().Unix())
-	expireAt := uint32(0)
-	if expireSeconds > 0 {
-		expireAt = now + uint32(expireSeconds)
-	}
 
 	slotId := uint8(hashVal >> 8)
 	hash16 := uint16(hashVal >> 16)
@@ -96,7 +112,7 @@ func (seg *segment) set(key, value []byte, hashVal uint64, expireSeconds int) (e
 		hdr.keyLen = uint16(len(key))
 		originAccessTime := hdr.accessTime
 		hdr.accessTime = now
-		hdr.expireAt = expireAt
+		hdr.expireAt = calculateExpireAt(now, expireSeconds, hdr.expireAt)
 		hdr.valLen = uint32(len(value))
 		if hdr.valCap >= hdr.valLen {
 			//in place overwrite
@@ -122,7 +138,7 @@ func (seg *segment) set(key, value []byte, hashVal uint64, expireSeconds int) (e
 		hdr.hash16 = hash16
 		hdr.keyLen = uint16(len(key))
 		hdr.accessTime = now
-		hdr.expireAt = expireAt
+		hdr.expireAt = calculateExpireAt(now, expireSeconds, 0)
 		hdr.valLen = uint32(len(value))
 		hdr.valCap = uint32(len(value))
 		if hdr.valCap == 0 { // avoid infinite loop when increasing capacity.

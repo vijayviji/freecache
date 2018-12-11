@@ -47,6 +47,9 @@ func NewCache(size int) (cache *Cache) {
 // If the key is larger than 65535 or value is larger than 1/1024 of the cache size,
 // the entry will not be written to the cache. expireSeconds <= 0 means no expire,
 // but it can be evicted when cache is full.
+// if expireSeconds < 0 and if the key already exists, it will use the existing expireSeconds
+// if expireSeconds == 0, then key won't have expire time
+// if expireSeconds > 0, then the key will expire after expireSeconds
 func (cache *Cache) Set(key, value []byte, expireSeconds int) (err error) {
 	hashVal := hashFunc(key)
 	segID := hashVal & segmentAndOpVal
@@ -213,6 +216,7 @@ func (cache *Cache) GetValueInt(key []byte) (interface{}, error) {
 // Increments the value, assuming the value is an integer.
 // Type of the integer is mentioned in valueType param, which could be any of {"UINT64", "UINT32", "INT64", "INT32"}
 // returns in numeric type
+// NOTE: expireSeconds will only be used if key doesn't exist. Else, old expireSeconds will be used.
 func (cache *Cache) IncrValueInt(key []byte, valueType string, expireSeconds int) (interface{}, error) {
 	hashVal := hashFunc(key)
 	segID := hashVal & segmentAndOpVal
@@ -225,6 +229,9 @@ func (cache *Cache) IncrValueInt(key []byte, valueType string, expireSeconds int
 		valueBytes = newValueBytes(valueType)
 	} else if err != nil {
 		return nil, err
+	} else {
+		// the key already exists, and so use the existing expireSeconds instead of the current one.
+		expireSeconds = -1
 	}
 
 	valueNum, valueBytes, err := incrValue(valueBytes, valueType)
