@@ -45,7 +45,7 @@ func TestCache_IncrExpire(t *testing.T) {
 		if err != nil {
 			t.Error("Iteration: ", i, "err should be nil. ", err)
 		} else if newValue != (oldValue + 1) {
-			t.Error("Iteration: ", i, "INCR failed. Wrong value. ", newValue, ". Expected: ", oldValue + 1)
+			t.Error("Iteration: ", i, "INCR failed. Wrong value. ", newValue, ". Expected: ", oldValue+1)
 		}
 
 		oldValue = newValue.(uint64)
@@ -607,7 +607,7 @@ func BenchmarkCache_IncrUint64(b *testing.B) {
 	var key [8]byte
 	for i := 0; i < b.N; i++ {
 		binary.LittleEndian.PutUint64(key[:], uint64(i))
-		cache.IncrValueInt(key[:], "UINT64", 10, )
+		cache.IncrValueInt(key[:], "UINT64", 10)
 	}
 }
 
@@ -616,7 +616,7 @@ func BenchmarkCache_IncrInt32(b *testing.B) {
 	var key [8]byte
 	for i := 0; i < b.N; i++ {
 		binary.LittleEndian.PutUint64(key[:], uint64(i))
-		cache.IncrValueInt(key[:], "INT32", 10, )
+		cache.IncrValueInt(key[:], "INT32", 10)
 	}
 }
 

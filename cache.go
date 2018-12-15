@@ -160,7 +160,7 @@ func incrValue(valueBytes []byte, valueType string) (interface{}, []byte, error)
 	return nil, valueBytes, nil
 }
 
-func newValueBytes(valueType string) ([]byte) {
+func newValueBytes(valueType string) []byte {
 	switch valueType {
 	case "INT64", "UINT64":
 		valueBytes64 := [8]byte{}
@@ -177,7 +177,7 @@ func newValueBytes(valueType string) ([]byte) {
 	}
 }
 
-func (cache *Cache) SetValueInt(key []byte, value interface{}, expireSeconds int) (error) {
+func (cache *Cache) SetValueInt(key []byte, value interface{}, expireSeconds int) error {
 	switch value.(type) {
 	case int64, uint64:
 		valueBytes64 := [8]byte{}
@@ -319,6 +319,71 @@ func (cache *Cache) HitRate() float64 {
 func (cache *Cache) OverwriteCount() (overwriteCount int64) {
 	for i := range cache.segments {
 		overwriteCount += atomic.LoadInt64(&cache.segments[i].overwrites)
+	}
+	return
+}
+
+func (cache *Cache) SlotsDataExpandCount() (expandCount uint64) {
+	for i := range cache.segments {
+		expandCount += atomic.LoadUint64(&cache.segments[i].nSDExpands)
+	}
+	return
+}
+
+func (cache *Cache) SetCount() (setCount uint64) {
+	for i := range cache.segments {
+		setCount += atomic.LoadUint64(&cache.segments[i].nSets)
+	}
+	return
+}
+
+func (cache *Cache) GetCount() (getCount uint64) {
+	for i := range cache.segments {
+		getCount += uint64(atomic.LoadInt64(&cache.segments[i].hitCount)) +
+			uint64(atomic.LoadInt64(&cache.segments[i].missCount))
+	}
+	return
+}
+
+func (cache *Cache) TotalSetTimeNs() (totalSetTimeNs uint64) {
+	for i := range cache.segments {
+		totalSetTimeNs += atomic.LoadUint64(&cache.segments[i].totalSetTimeNs)
+	}
+	return
+}
+
+func (cache *Cache) TotalGetTimeNs() (totalGetTimeNs uint64) {
+	for i := range cache.segments {
+		totalGetTimeNs += atomic.LoadUint64(&cache.segments[i].totalGetTimeNs)
+	}
+	return
+}
+
+func (cache *Cache) TotalEvacuateTimeNs() (totalEvacuateNs uint64) {
+	for i := range cache.segments {
+		totalEvacuateNs += atomic.LoadUint64(&cache.segments[i].totalEvacuateNs)
+	}
+	return
+}
+
+func (cache *Cache) TotalSlotsDataExpandTimeNs() (totalSDExpandTimeNs uint64) {
+	for i := range cache.segments {
+		totalSDExpandTimeNs += atomic.LoadUint64(&cache.segments[i].totalSDExpandTimeNs)
+	}
+	return
+}
+
+func (cache *Cache) SlotsDataMemInUse() (sdMemInUse uint64) {
+	for i := range cache.segments {
+		sdMemInUse += atomic.LoadUint64(&cache.segments[i].sdMemInUse)
+	}
+	return
+}
+
+// May also include memory that have not been freed by GC yet.
+func (cache *Cache) TotalSlotsDataMemReleasedToGC() (totalSDMemReleasedToGC uint64) {
+	for i := range cache.segments {
+		totalSDMemReleasedToGC += atomic.LoadUint64(&cache.segments[i].totalSDMemReleasedToGC)
 	}
 	return
 }

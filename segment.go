@@ -38,21 +38,35 @@ type entryHdr struct {
 // a segment contains 256 slots, a slot is an array of entry pointers ordered by hash16 value
 // the entry can be looked up by hash value of the key.
 type segment struct {
-	rb            RingBuf // ring buffer that stores data
-	segId         int
-	_             uint32
+	rb    RingBuf // ring buffer that stores data
+	segId int
+	_     uint32
+
+	// stats
 	missCount     int64
 	hitCount      int64
 	entryCount    int64
-	totalCount    int64      // number of entries in ring buffer, including deleted entries.
-	totalTime     int64      // used to calculate least recent used entry.
-	totalEvacuate int64      // used for debug
-	totalExpired  int64      // used for debug
-	overwrites    int64      // used for debug
-	vacuumLen     int64      // up to vacuumLen, new data can be written without overwriting old data.
-	slotLens      [256]int32 // The actual length for every slot.
-	slotCap       int32      // max number of entry pointers a slot can hold.
-	slotsData     []entryPtr // shared by all 256 slots
+	totalCount    int64 // number of entries in ring buffer, including deleted entries.
+	totalTime     int64 // used to calculate least recent used entry.
+	totalEvacuate int64 // total evacuates in this segment from last reset
+	totalExpired  int64 // used for debug
+	overwrites    int64 // used for debug
+
+	// additional stats by Viji
+	nSDExpands             uint64 // total slots data expands in this segment from last reset
+	nSets                  uint64 // total sets in this segment from last reset
+	totalSetTimeNs         uint64 // total time taken for sets in this segment in nanoseconds from last reset
+	totalGetTimeNs         uint64 // total time taken for gets in this segment in nanoseconds from last reset
+	totalEvacuateNs        uint64 // total time taken for evacuate in this segment in nanoseconds from last reset
+	totalSDExpandTimeNs    uint64 // total time taken for slotsData in this segment in nanoseconds from last reset
+	sdMemInUse             uint64 // memory currently in use for slotsData
+	totalSDMemReleasedToGC uint64 /* total memory (used by slotsData), which are released to GC from program start
+	(may not have been claimed by GC yet) */
+
+	vacuumLen int64      // up to vacuumLen, new data can be written without overwriting old data.
+	slotLens  [256]int32 // The actual length for every slot.
+	slotCap   int32      // max number of entry pointers a slot can hold.
+	slotsData []entryPtr // shared by all 256 slots
 }
 
 func newSegment(bufSize int, segId int) (seg segment) {
@@ -65,7 +79,7 @@ func newSegment(bufSize int, segId int) (seg segment) {
 }
 
 // If expireSeconds is <= 0, then we use existingExpireAt value. Similar for other conditions.
-func calculateExpireAt(now uint32, expireSeconds int, existingExpireAt uint32) (uint32) {
+func calculateExpireAt(now uint32, expireSeconds int, existingExpireAt uint32) uint32 {
 	var expireAt uint32
 
 	switch true {
@@ -93,6 +107,8 @@ func (seg *segment) set(key, value []byte, hashVal uint64, expireSeconds int) (e
 		return ErrLargeEntry
 	}
 
+	defer atomic.AddUint64(&seg.nSets, 1)
+
 	now := uint32(time.Now().Unix())
 
 	slotId := uint8(hashVal >> 8)
@@ -116,6 +132,7 @@ func (seg *segment) set(key, value []byte, hashVal uint64, expireSeconds int) (e
 		hdr.valLen = uint32(len(value))
 		if hdr.valCap >= hdr.valLen {
 			//in place overwrite
+			atomic.AddUint64(&seg.totalSetTimeNs, uint64(time.Now().Unix())-uint64(now))
 			atomic.AddInt64(&seg.totalTime, int64(hdr.accessTime)-int64(originAccessTime))
 			seg.rb.WriteAt(hdrBuf[:], matchedPtr.offset)
 			seg.rb.WriteAt(value, matchedPtr.offset+ENTRY_HDR_SIZE+int64(hdr.keyLen))
@@ -161,6 +178,7 @@ func (seg *segment) set(key, value []byte, hashVal uint64, expireSeconds int) (e
 	seg.rb.Write(key)
 	seg.rb.Write(value)
 	seg.rb.Skip(int64(hdr.valCap - hdr.valLen))
+	atomic.AddUint64(&seg.totalSetTimeNs, uint64(time.Now().Unix())-uint64(now))
 	atomic.AddInt64(&seg.totalTime, int64(now))
 	atomic.AddInt64(&seg.totalCount, 1)
 	seg.vacuumLen -= entryLen
@@ -170,6 +188,9 @@ func (seg *segment) set(key, value []byte, hashVal uint64, expireSeconds int) (e
 func (seg *segment) evacuate(entryLen int64, slotId uint8, now uint32) (slotModified bool) {
 	var oldHdrBuf [ENTRY_HDR_SIZE]byte
 	consecutiveEvacuate := 0
+
+	evacuationOccurred := false
+	timeBegin := uint64(time.Now().Unix())
 	for seg.vacuumLen < entryLen {
 		oldOff := seg.rb.End() + seg.vacuumLen - seg.rb.Size()
 		seg.rb.ReadAt(oldHdrBuf[:], oldOff)
@@ -203,7 +224,13 @@ func (seg *segment) evacuate(entryLen int64, slotId uint8, now uint32) (slotModi
 			consecutiveEvacuate++
 			atomic.AddInt64(&seg.totalEvacuate, 1)
 		}
+		evacuationOccurred = true
 	}
+
+	if evacuationOccurred {
+		atomic.AddUint64(&seg.totalEvacuateNs, uint64(time.Now().Unix())-timeBegin)
+	}
+
 	return
 }
 
@@ -231,6 +258,7 @@ func (seg *segment) get(key []byte, hashVal uint64) (value []byte, expireAt uint
 		atomic.AddInt64(&seg.totalExpired, 1)
 		err = ErrNotFound
 		atomic.AddInt64(&seg.missCount, 1)
+		atomic.AddUint64(&seg.totalGetTimeNs, uint64(time.Now().Unix())-uint64(now))
 		return
 	}
 	atomic.AddInt64(&seg.totalTime, int64(now-hdr.accessTime))
@@ -240,6 +268,7 @@ func (seg *segment) get(key []byte, hashVal uint64) (value []byte, expireAt uint
 
 	seg.rb.ReadAt(value, ptr.offset+ENTRY_HDR_SIZE+int64(hdr.keyLen))
 	atomic.AddInt64(&seg.hitCount, 1)
+	atomic.AddUint64(&seg.totalGetTimeNs, uint64(time.Now().Unix())-uint64(now))
 	return
 }
 
@@ -286,13 +315,21 @@ func (seg *segment) ttl(key []byte, hashVal uint64) (timeLeft uint32, err error)
 }
 
 func (seg *segment) expand() {
+	defer atomic.AddUint64(&seg.nSDExpands, 1)
+
+	timeBegin := uint64(time.Now().Unix())
 	newSlotData := make([]entryPtr, seg.slotCap*2*256)
 	for i := 0; i < 256; i++ {
 		off := int32(i) * seg.slotCap
 		copy(newSlotData[off*2:], seg.slotsData[off:off+seg.slotLens[i]])
 	}
+	atomic.AddUint64(&seg.totalSDMemReleasedToGC, uint64(unsafe.Sizeof(seg.slotsData[0]))*uint64(seg.slotCap)*256)
+
 	seg.slotCap *= 2
 	seg.slotsData = newSlotData
+
+	atomic.StoreUint64(&seg.sdMemInUse, uint64(unsafe.Sizeof(seg.slotsData[0]))*uint64(seg.slotCap)*256)
+	atomic.AddUint64(&seg.totalSDExpandTimeNs, uint64(time.Now().Unix())-uint64(timeBegin))
 }
 
 func (seg *segment) updateEntryPtr(slotId uint8, hash16 uint16, oldOff, newOff int64) {
@@ -390,6 +427,13 @@ func (seg *segment) resetStatistics() {
 	atomic.StoreInt64(&seg.overwrites, 0)
 	atomic.StoreInt64(&seg.hitCount, 0)
 	atomic.StoreInt64(&seg.missCount, 0)
+
+	atomic.StoreUint64(&seg.nSDExpands, 0)
+	atomic.StoreUint64(&seg.nSets, 0)
+	atomic.StoreUint64(&seg.totalSetTimeNs, 0)
+	atomic.StoreUint64(&seg.totalGetTimeNs, 0)
+	atomic.StoreUint64(&seg.totalEvacuateNs, 0)
+	atomic.StoreUint64(&seg.totalSDExpandTimeNs, 0)
 }
 
 func (seg *segment) clear() {
@@ -402,12 +446,9 @@ func (seg *segment) clear() {
 		seg.slotLens[i] = 0
 	}
 
-	atomic.StoreInt64(&seg.hitCount, 0)
-	atomic.StoreInt64(&seg.missCount, 0)
 	atomic.StoreInt64(&seg.entryCount, 0)
 	atomic.StoreInt64(&seg.totalCount, 0)
 	atomic.StoreInt64(&seg.totalTime, 0)
-	atomic.StoreInt64(&seg.totalEvacuate, 0)
-	atomic.StoreInt64(&seg.totalExpired, 0)
-	atomic.StoreInt64(&seg.overwrites, 0)
+
+	seg.resetStatistics()
 }
