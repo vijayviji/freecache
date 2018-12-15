@@ -385,10 +385,10 @@ func (cache *Cache) SegmentsCount() (int) {
 	return len(cache.segments)
 }
 
-func (cache *Cache) GetSegmentStats(index int) (m *map[string]uint64) {
+func (cache *Cache) GetSegmentStats(m *map[string]uint64, index int) {
 	if index >= len(cache.segments) {
 		fmt.Errorf("Out of boundary cache segment access. Index: %d", index)
-		return nil
+		return
 	}
 
 	(*m)["segment" + string(index) + "nEvacuates"] = uint64(atomic.LoadInt64(&cache.segments[index].totalEvacuate))
@@ -412,8 +412,6 @@ func (cache *Cache) GetSegmentStats(index int) (m *map[string]uint64) {
 	} else {
 		(*m)["segment" + string(index) + "avgAccessTime"] = uint64(totalTime / entryCount)
 	}
-
-	return
 }
 
 // May also include memory that have not been freed by GC yet.
