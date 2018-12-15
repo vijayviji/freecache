@@ -3,6 +3,7 @@ package freecache
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -378,6 +379,19 @@ func (cache *Cache) SlotsDataMemInUse() (sdMemInUse uint64) {
 		sdMemInUse += atomic.LoadUint64(&cache.segments[i].sdMemInUse)
 	}
 	return
+}
+
+func (cache *Cache) SegmentsCount() (int) {
+	return len(cache.segments)
+}
+
+func (cache *Cache) GetSegment(index int) (*segment) {
+	if index >= len(cache.segments) {
+		fmt.Errorf("Out of boundary cache segment access. Index: %d", index)
+		return nil
+	}
+
+	return &cache.segments[index]
 }
 
 // May also include memory that have not been freed by GC yet.
