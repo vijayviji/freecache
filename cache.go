@@ -391,27 +391,18 @@ func (cache *Cache) GetSegmentStats(m *map[string]uint64, index int) {
 		return
 	}
 
-	(*m)["segment" + string(index) + "nEvacuates"] = uint64(atomic.LoadInt64(&cache.segments[index].totalEvacuate))
-	(*m)["segment" + string(index) + "nExpires"] = uint64(atomic.LoadInt64(&cache.segments[index].totalExpired))
-	(*m)["segment" + string(index) + "nEntries"] = uint64(atomic.LoadInt64(&cache.segments[index].entryCount))
-	(*m)["segment" + string(index) + "nSlotsDataExpands"] = uint64(atomic.LoadUint64(&cache.segments[index].nSDExpands))
-	(*m)["segment" + string(index) + "nSets"] = uint64(atomic.LoadUint64(&cache.segments[index].nSets))
-	(*m)["segment" + string(index) + "nGets"] = uint64(atomic.LoadInt64(&cache.segments[index].hitCount)) +
+	(*m)["segment" + string(index) + ".nEvacuates"] = uint64(atomic.LoadInt64(&cache.segments[index].totalEvacuate))
+	(*m)["segment" + string(index) + ".nExpires"] = uint64(atomic.LoadInt64(&cache.segments[index].totalExpired))
+	(*m)["segment" + string(index) + ".nEntries"] = uint64(atomic.LoadInt64(&cache.segments[index].entryCount))
+	(*m)["segment" + string(index) + ".nSlotsDataExpands"] = uint64(atomic.LoadUint64(&cache.segments[index].nSDExpands))
+	(*m)["segment" + string(index) + ".nSets"] = uint64(atomic.LoadUint64(&cache.segments[index].nSets))
+	(*m)["segment" + string(index) + ".nGets"] = uint64(atomic.LoadInt64(&cache.segments[index].hitCount)) +
 							uint64(atomic.LoadInt64(&cache.segments[index].missCount))
-	(*m)["segment" + string(index) + "totalSetTimeNS"] = uint64(atomic.LoadUint64(&cache.segments[index].totalSetTimeNs))
-	(*m)["segment" + string(index) + "totalGetTimeNS"] = uint64(atomic.LoadUint64(&cache.segments[index].totalGetTimeNs))
-	(*m)["segment" + string(index) + "totalEvacuateTimeNs"] = uint64(atomic.LoadUint64(&cache.segments[index].totalEvacuateTimeNs))
-	(*m)["segment" + string(index) + "slotsDataMemInUse"] = uint64(atomic.LoadUint64(&cache.segments[index].sdMemInUse))
-	(*m)["segment" + string(index) + "slotsDataMemReleasedToGC"] = uint64(atomic.LoadUint64(&cache.segments[index].totalSDMemReleasedToGC))
-
-	totalTime := atomic.LoadInt64(&cache.segments[index].totalTime)
-	entryCount := atomic.LoadInt64(&cache.segments[index].totalCount)
-
-	if entryCount == 0 {
-		(*m)["segment" + string(index) + "avgAccessTime"] = 0
-	} else {
-		(*m)["segment" + string(index) + "avgAccessTime"] = uint64(totalTime / entryCount)
-	}
+	(*m)["segment" + string(index) + ".totalSetTimeNS"] = uint64(atomic.LoadUint64(&cache.segments[index].totalSetTimeNs))
+	(*m)["segment" + string(index) + ".totalGetTimeNS"] = uint64(atomic.LoadUint64(&cache.segments[index].totalGetTimeNs))
+	(*m)["segment" + string(index) + ".totalEvacuateTimeNs"] = uint64(atomic.LoadUint64(&cache.segments[index].totalEvacuateTimeNs))
+	(*m)["segment" + string(index) + ".slotsDataMemInUse"] = uint64(atomic.LoadUint64(&cache.segments[index].sdMemInUse))
+	(*m)["segment" + string(index) + ".slotsDataMemReleasedToGC"] = uint64(atomic.LoadUint64(&cache.segments[index].totalSDMemReleasedToGC))
 }
 
 // May also include memory that have not been freed by GC yet.

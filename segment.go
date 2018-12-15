@@ -94,6 +94,10 @@ func calculateExpireAt(now uint32, expireSeconds int, existingExpireAt uint32) u
 	return expireAt
 }
 
+func getElapsedTimeNS(startTime int64) (int64) {
+	return time.Now().UnixNano() - startTime
+}
+
 // if expireSeconds < 0 and if the key already exists, it will use the existing expireSeconds
 // if expireSeconds == 0, then key won't have expire time
 // if expireSeconds > 0, then the key will expire after expireSeconds
@@ -110,6 +114,7 @@ func (seg *segment) set(key, value []byte, hashVal uint64, expireSeconds int) (e
 	defer atomic.AddUint64(&seg.nSets, 1)
 
 	now := uint32(time.Now().Unix())
+	startTimeNS := time.Now().UnixNano()
 
 	slotId := uint8(hashVal >> 8)
 	hash16 := uint16(hashVal >> 16)
@@ -132,7 +137,7 @@ func (seg *segment) set(key, value []byte, hashVal uint64, expireSeconds int) (e
 		hdr.valLen = uint32(len(value))
 		if hdr.valCap >= hdr.valLen {
 			//in place overwrite
-			atomic.AddUint64(&seg.totalSetTimeNs, uint64(time.Now().Unix())-uint64(now))
+			atomic.AddUint64(&seg.totalSetTimeNs, uint64(getElapsedTimeNS(startTimeNS)))
 			atomic.AddInt64(&seg.totalTime, int64(hdr.accessTime)-int64(originAccessTime))
 			seg.rb.WriteAt(hdrBuf[:], matchedPtr.offset)
 			seg.rb.WriteAt(value, matchedPtr.offset+ENTRY_HDR_SIZE+int64(hdr.keyLen))
@@ -178,7 +183,7 @@ func (seg *segment) set(key, value []byte, hashVal uint64, expireSeconds int) (e
 	seg.rb.Write(key)
 	seg.rb.Write(value)
 	seg.rb.Skip(int64(hdr.valCap - hdr.valLen))
-	atomic.AddUint64(&seg.totalSetTimeNs, uint64(time.Now().Unix())-uint64(now))
+	atomic.AddUint64(&seg.totalSetTimeNs, uint64(getElapsedTimeNS(startTimeNS)))
 	atomic.AddInt64(&seg.totalTime, int64(now))
 	atomic.AddInt64(&seg.totalCount, 1)
 	seg.vacuumLen -= entryLen
@@ -190,7 +195,7 @@ func (seg *segment) evacuate(entryLen int64, slotId uint8, now uint32) (slotModi
 	consecutiveEvacuate := 0
 
 	evacuationOccurred := false
-	timeBegin := uint64(time.Now().Unix())
+	startTimeNS := time.Now().UnixNano()
 	for seg.vacuumLen < entryLen {
 		oldOff := seg.rb.End() + seg.vacuumLen - seg.rb.Size()
 		seg.rb.ReadAt(oldHdrBuf[:], oldOff)
@@ -228,13 +233,15 @@ func (seg *segment) evacuate(entryLen int64, slotId uint8, now uint32) (slotModi
 	}
 
 	if evacuationOccurred {
-		atomic.AddUint64(&seg.totalEvacuateTimeNs, uint64(time.Now().Unix())-timeBegin)
+		atomic.AddUint64(&seg.totalEvacuateTimeNs, uint64(getElapsedTimeNS(startTimeNS)))
 	}
 
 	return
 }
 
 func (seg *segment) get(key []byte, hashVal uint64) (value []byte, expireAt uint32, err error) {
+	startTimeNS := time.Now().UnixNano()
+
 	slotId := uint8(hashVal >> 8)
 	hash16 := uint16(hashVal >> 16)
 	slotOff := int32(slotId) * seg.slotCap
@@ -248,6 +255,7 @@ func (seg *segment) get(key []byte, hashVal uint64) (value []byte, expireAt uint
 	ptr := &slot[idx]
 	now := uint32(time.Now().Unix())
 
+
 	var hdrBuf [ENTRY_HDR_SIZE]byte
 	seg.rb.ReadAt(hdrBuf[:], ptr.offset)
 	hdr := (*entryHdr)(unsafe.Pointer(&hdrBuf[0]))
@@ -258,7 +266,7 @@ func (seg *segment) get(key []byte, hashVal uint64) (value []byte, expireAt uint
 		atomic.AddInt64(&seg.totalExpired, 1)
 		err = ErrNotFound
 		atomic.AddInt64(&seg.missCount, 1)
-		atomic.AddUint64(&seg.totalGetTimeNs, uint64(time.Now().Unix())-uint64(now))
+		atomic.AddUint64(&seg.totalGetTimeNs, uint64(getElapsedTimeNS(startTimeNS)))
 		return
 	}
 	atomic.AddInt64(&seg.totalTime, int64(now-hdr.accessTime))
@@ -268,7 +276,7 @@ func (seg *segment) get(key []byte, hashVal uint64) (value []byte, expireAt uint
 
 	seg.rb.ReadAt(value, ptr.offset+ENTRY_HDR_SIZE+int64(hdr.keyLen))
 	atomic.AddInt64(&seg.hitCount, 1)
-	atomic.AddUint64(&seg.totalGetTimeNs, uint64(time.Now().Unix())-uint64(now))
+	atomic.AddUint64(&seg.totalGetTimeNs, uint64(getElapsedTimeNS(startTimeNS)))
 	return
 }
 
