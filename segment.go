@@ -57,7 +57,7 @@ type segment struct {
 	nSets                  uint64 // total sets in this segment from last reset
 	totalSetTimeNs         uint64 // total time taken for sets in this segment in nanoseconds from last reset
 	totalGetTimeNs         uint64 // total time taken for gets in this segment in nanoseconds from last reset
-	totalEvacuateNs        uint64 // total time taken for evacuate in this segment in nanoseconds from last reset
+	totalEvacuateTimeNs        uint64 // total time taken for evacuate in this segment in nanoseconds from last reset
 	totalSDExpandTimeNs    uint64 // total time taken for slotsData in this segment in nanoseconds from last reset
 	sdMemInUse             uint64 // memory currently in use for slotsData
 	totalSDMemReleasedToGC uint64 /* total memory (used by slotsData), which are released to GC from program start
@@ -228,7 +228,7 @@ func (seg *segment) evacuate(entryLen int64, slotId uint8, now uint32) (slotModi
 	}
 
 	if evacuationOccurred {
-		atomic.AddUint64(&seg.totalEvacuateNs, uint64(time.Now().Unix())-timeBegin)
+		atomic.AddUint64(&seg.totalEvacuateTimeNs, uint64(time.Now().Unix())-timeBegin)
 	}
 
 	return
@@ -432,7 +432,7 @@ func (seg *segment) resetStatistics() {
 	atomic.StoreUint64(&seg.nSets, 0)
 	atomic.StoreUint64(&seg.totalSetTimeNs, 0)
 	atomic.StoreUint64(&seg.totalGetTimeNs, 0)
-	atomic.StoreUint64(&seg.totalEvacuateNs, 0)
+	atomic.StoreUint64(&seg.totalEvacuateTimeNs, 0)
 	atomic.StoreUint64(&seg.totalSDExpandTimeNs, 0)
 }
 

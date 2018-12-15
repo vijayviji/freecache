@@ -360,9 +360,9 @@ func (cache *Cache) TotalGetTimeNs() (totalGetTimeNs uint64) {
 	return
 }
 
-func (cache *Cache) TotalEvacuateTimeNs() (totalEvacuateNs uint64) {
+func (cache *Cache) TotalEvacuateTimeNs() (totalEvacuateTimeNs uint64) {
 	for i := range cache.segments {
-		totalEvacuateNs += atomic.LoadUint64(&cache.segments[i].totalEvacuateNs)
+		totalEvacuateTimeNs += atomic.LoadUint64(&cache.segments[i].totalEvacuateTimeNs)
 	}
 	return
 }
@@ -385,13 +385,35 @@ func (cache *Cache) SegmentsCount() (int) {
 	return len(cache.segments)
 }
 
-func (cache *Cache) GetSegment(index int) (*segment) {
+func (cache *Cache) GetSegmentStats(index int) (m *map[string]uint64) {
 	if index >= len(cache.segments) {
 		fmt.Errorf("Out of boundary cache segment access. Index: %d", index)
 		return nil
 	}
 
-	return &cache.segments[index]
+	(*m)["cache.nEvacuates"] = uint64(atomic.LoadInt64(&cache.segments[index].totalEvacuate))
+	(*m)["cache.nExpires"] = uint64(atomic.LoadInt64(&cache.segments[index].totalExpired))
+	(*m)["cache.nEntries"] = uint64(atomic.LoadInt64(&cache.segments[index].entryCount))
+	(*m)["cache.nSlotsDataExpands"] = uint64(atomic.LoadUint64(&cache.segments[index].nSDExpands))
+	(*m)["cache.nSets"] = uint64(atomic.LoadUint64(&cache.segments[index].nSets))
+	(*m)["cache.nGets"] = uint64(atomic.LoadInt64(&cache.segments[index].hitCount)) +
+							uint64(atomic.LoadInt64(&cache.segments[index].missCount))
+	(*m)["cache.totalSetTimeNS"] = uint64(atomic.LoadUint64(&cache.segments[index].totalSetTimeNs))
+	(*m)["cache.totalGetTimeNS"] = uint64(atomic.LoadUint64(&cache.segments[index].totalGetTimeNs))
+	(*m)["cache.totalEvacuateTimeNs"] = uint64(atomic.LoadUint64(&cache.segments[index].totalEvacuateTimeNs))
+	(*m)["cache.slotsDataMemInUse"] = uint64(atomic.LoadUint64(&cache.segments[index].sdMemInUse))
+	(*m)["cache.slotsDataMemReleasedToGC"] = uint64(atomic.LoadUint64(&cache.segments[index].totalSDMemReleasedToGC))
+
+	totalTime := atomic.LoadInt64(&cache.segments[index].totalTime)
+	entryCount := atomic.LoadInt64(&cache.segments[index].totalCount)
+
+	if entryCount == 0 {
+		(*m)["cache.avgAccessTime"] = 0
+	} else {
+		(*m)["cache.avgAccessTime"] = uint64(totalTime / entryCount)
+	}
+
+	return
 }
 
 // May also include memory that have not been freed by GC yet.
