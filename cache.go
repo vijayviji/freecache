@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/cespare/xxhash"
 )
@@ -22,6 +23,9 @@ const (
 type Cache struct {
 	locks    [segmentCount]sync.Mutex
 	segments [segmentCount]segment
+
+	// Stats added by Vijay
+	incrTimeTakenInNs uint64
 }
 
 func hashFunc(data []byte) uint64 {
@@ -219,6 +223,7 @@ func (cache *Cache) GetValueInt(key []byte) (interface{}, error) {
 // returns in numeric type
 // NOTE: expireSeconds will only be used if key doesn't exist. Else, old expireSeconds will be used.
 func (cache *Cache) IncrValueInt(key []byte, valueType string, expireSeconds int) (interface{}, error) {
+	beginTime := time.Now().UnixNano()
 	hashVal := hashFunc(key)
 	segID := hashVal & segmentAndOpVal
 	cache.locks[segID].Lock()
@@ -229,6 +234,7 @@ func (cache *Cache) IncrValueInt(key []byte, valueType string, expireSeconds int
 		// key doesn't exist. Create a new value with 0 as value.
 		valueBytes = newValueBytes(valueType)
 	} else if err != nil {
+		cache.addIncrLatencyInNs(elapsedTimeInNanos(beginTime))
 		return nil, err
 	} else {
 		// the key already exists, and so use the existing expireSeconds instead of the current one.
@@ -237,10 +243,12 @@ func (cache *Cache) IncrValueInt(key []byte, valueType string, expireSeconds int
 
 	valueNum, valueBytes, err := incrValue(valueBytes, valueType)
 	if err != nil {
+		cache.addIncrLatencyInNs(elapsedTimeInNanos(beginTime))
 		return nil, err
 	}
 
 	err = cache.segments[segID].set(key, valueBytes, hashVal, expireSeconds)
+	cache.addIncrLatencyInNs(elapsedTimeInNanos(beginTime))
 	return valueNum, err
 }
 
@@ -382,6 +390,10 @@ func (cache *Cache) TotalSlotsDataExpandTimeNs() (totalSDExpandTimeNs uint64) {
 	return
 }
 
+func (cache *Cache) TotalTimeInINCRNs() uint64 {
+	return cache.incrTimeTakenInNs
+}
+
 func (cache *Cache) SlotsDataMemInUse() (sdMemInUse uint64) {
 	for i := range cache.segments {
 		sdMemInUse += atomic.LoadUint64(&cache.segments[i].sdMemInUse)
@@ -422,6 +434,15 @@ func (cache *Cache) TotalSlotsDataMemReleasedToGC() (totalSDMemReleasedToGC uint
 	return
 }
 
+func (cache *Cache) addIncrLatencyInNs(count int64) {
+	atomic.AddUint64(&cache.incrTimeTakenInNs, uint64(count))
+}
+
+func elapsedTimeInNanos(beginTimeNs int64) int64 {
+	// Seconds returns the duration as a floating point number of seconds.
+	return time.Now().UnixNano() - beginTimeNs
+}
+
 // Clear clears the cache.
 func (cache *Cache) Clear() {
 	for i := range cache.segments {
@@ -429,6 +450,8 @@ func (cache *Cache) Clear() {
 		cache.segments[i].clear()
 		cache.locks[i].Unlock()
 	}
+
+	cache.incrTimeTakenInNs = 0
 }
 
 // ResetStatistics refreshes the current state of the statistics.
@@ -438,4 +461,6 @@ func (cache *Cache) ResetStatistics() {
 		cache.segments[i].resetStatistics()
 		cache.locks[i].Unlock()
 	}
+
+	cache.incrTimeTakenInNs = 0
 }
