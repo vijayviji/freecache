@@ -43,22 +43,22 @@ type segment struct {
 	_     uint32
 
 	// stats
-	missCount     int64
-	hitCount      int64
-	entryCount    int64
-	totalCount    int64 // number of entries in ring buffer, including deleted entries.
-	totalTime     int64 // used to calculate least recent used entry.
+	missCount       int64
+	hitCount        int64
+	entryCount      int64
+	totalCount      int64 // number of entries in ring buffer, including deleted entries.
+	totalTime       int64 // used to calculate least recent used entry.
 	totalRbEvacuate int64 // total evacuates in this segment from last reset
-	totalExpired  int64 // used for debug
-	overwrites    int64 // used for debug
+	totalExpired    int64 // used for debug
+	overwrites      int64 // used for debug
 
 	// additional stats by Viji
-	nEvacuateOpCount	   uint64  // total number of evacuate operations happened
+	nEvacuateOpCount       uint64 // total number of evacuate operations happened
 	nSDExpands             uint64 // total slots data expands in this segment from last reset
 	nSets                  uint64 // total sets in this segment from last reset
 	totalSetTimeNs         uint64 // total time taken for sets in this segment in nanoseconds from last reset
 	totalGetTimeNs         uint64 // total time taken for gets in this segment in nanoseconds from last reset
-	totalEvacuateTimeNs        uint64 // total time taken for evacuate in this segment in nanoseconds from last reset
+	totalEvacuateTimeNs    uint64 // total time taken for evacuate in this segment in nanoseconds from last reset
 	totalSDExpandTimeNs    uint64 // total time taken for slotsData in this segment in nanoseconds from last reset
 	sdMemInUse             uint64 // memory currently in use for slotsData
 	totalSDMemReleasedToGC uint64 /* total memory (used by slotsData), which are released to GC from program start
@@ -95,7 +95,7 @@ func calculateExpireAt(now uint32, expireSeconds int, existingExpireAt uint32) u
 	return expireAt
 }
 
-func getElapsedTimeNS(startTime int64) (int64) {
+func getElapsedTimeNS(startTime int64) int64 {
 	return time.Now().UnixNano() - startTime
 }
 
@@ -256,7 +256,6 @@ func (seg *segment) get(key []byte, hashVal uint64) (value []byte, expireAt uint
 	}
 	ptr := &slot[idx]
 	now := uint32(time.Now().Unix())
-
 
 	var hdrBuf [ENTRY_HDR_SIZE]byte
 	seg.rb.ReadAt(hdrBuf[:], ptr.offset)

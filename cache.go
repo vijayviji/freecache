@@ -26,6 +26,7 @@ type Cache struct {
 
 	// Stats added by Vijay
 	incrTimeTakenInNs uint64
+	incrReqCount      uint64
 }
 
 func hashFunc(data []byte) uint64 {
@@ -224,6 +225,7 @@ func (cache *Cache) GetValueInt(key []byte) (interface{}, error) {
 // NOTE: expireSeconds will only be used if key doesn't exist. Else, old expireSeconds will be used.
 func (cache *Cache) IncrValueInt(key []byte, valueType string, expireSeconds int) (interface{}, error) {
 	beginTime := time.Now().UnixNano()
+	cache.incrINCRReqCount(1)
 	hashVal := hashFunc(key)
 	segID := hashVal & segmentAndOpVal
 	cache.locks[segID].Lock()
@@ -362,6 +364,10 @@ func (cache *Cache) GetCount() (getCount uint64) {
 	return
 }
 
+func (cache *Cache) INCRCount() uint64 {
+	return cache.incrReqCount
+}
+
 func (cache *Cache) TotalSetTimeNs() (totalSetTimeNs uint64) {
 	for i := range cache.segments {
 		totalSetTimeNs += atomic.LoadUint64(&cache.segments[i].totalSetTimeNs)
@@ -401,7 +407,7 @@ func (cache *Cache) SlotsDataMemInUse() (sdMemInUse uint64) {
 	return
 }
 
-func (cache *Cache) SegmentsCount() (int) {
+func (cache *Cache) SegmentsCount() int {
 	return len(cache.segments)
 }
 
@@ -411,19 +417,19 @@ func (cache *Cache) GetSegmentStats(m *map[string]uint64, index int) {
 		return
 	}
 
-	(*m)["segment" + string(index) + ".nRbRelogs"] = uint64(atomic.LoadInt64(&cache.segments[index].totalRbEvacuate))
-	(*m)["segment" + string(index) + ".nEvacauteOps"] = atomic.LoadUint64(&cache.segments[index].nEvacuateOpCount)
-	(*m)["segment" + string(index) + ".nExpires"] = uint64(atomic.LoadInt64(&cache.segments[index].totalExpired))
-	(*m)["segment" + string(index) + ".nEntries"] = uint64(atomic.LoadInt64(&cache.segments[index].entryCount))
-	(*m)["segment" + string(index) + ".nSlotsDataExpands"] = uint64(atomic.LoadUint64(&cache.segments[index].nSDExpands))
-	(*m)["segment" + string(index) + ".nSets"] = uint64(atomic.LoadUint64(&cache.segments[index].nSets))
-	(*m)["segment" + string(index) + ".nGets"] = uint64(atomic.LoadInt64(&cache.segments[index].hitCount)) +
-							uint64(atomic.LoadInt64(&cache.segments[index].missCount))
-	(*m)["segment" + string(index) + ".totalSetTimeNS"] = uint64(atomic.LoadUint64(&cache.segments[index].totalSetTimeNs))
-	(*m)["segment" + string(index) + ".totalGetTimeNS"] = uint64(atomic.LoadUint64(&cache.segments[index].totalGetTimeNs))
-	(*m)["segment" + string(index) + ".totalEvacuateTimeNs"] = uint64(atomic.LoadUint64(&cache.segments[index].totalEvacuateTimeNs))
-	(*m)["segment" + string(index) + ".slotsDataMemInUse"] = uint64(atomic.LoadUint64(&cache.segments[index].sdMemInUse))
-	(*m)["segment" + string(index) + ".slotsDataMemReleasedToGC"] = uint64(atomic.LoadUint64(&cache.segments[index].totalSDMemReleasedToGC))
+	(*m)["segment"+string(index)+".nRbRelogs"] = uint64(atomic.LoadInt64(&cache.segments[index].totalRbEvacuate))
+	(*m)["segment"+string(index)+".nEvacauteOps"] = atomic.LoadUint64(&cache.segments[index].nEvacuateOpCount)
+	(*m)["segment"+string(index)+".nExpires"] = uint64(atomic.LoadInt64(&cache.segments[index].totalExpired))
+	(*m)["segment"+string(index)+".nEntries"] = uint64(atomic.LoadInt64(&cache.segments[index].entryCount))
+	(*m)["segment"+string(index)+".nSlotsDataExpands"] = uint64(atomic.LoadUint64(&cache.segments[index].nSDExpands))
+	(*m)["segment"+string(index)+".nSets"] = uint64(atomic.LoadUint64(&cache.segments[index].nSets))
+	(*m)["segment"+string(index)+".nGets"] = uint64(atomic.LoadInt64(&cache.segments[index].hitCount)) +
+		uint64(atomic.LoadInt64(&cache.segments[index].missCount))
+	(*m)["segment"+string(index)+".totalSetTimeNS"] = uint64(atomic.LoadUint64(&cache.segments[index].totalSetTimeNs))
+	(*m)["segment"+string(index)+".totalGetTimeNS"] = uint64(atomic.LoadUint64(&cache.segments[index].totalGetTimeNs))
+	(*m)["segment"+string(index)+".totalEvacuateTimeNs"] = uint64(atomic.LoadUint64(&cache.segments[index].totalEvacuateTimeNs))
+	(*m)["segment"+string(index)+".slotsDataMemInUse"] = uint64(atomic.LoadUint64(&cache.segments[index].sdMemInUse))
+	(*m)["segment"+string(index)+".slotsDataMemReleasedToGC"] = uint64(atomic.LoadUint64(&cache.segments[index].totalSDMemReleasedToGC))
 }
 
 // May also include memory that have not been freed by GC yet.
@@ -436,6 +442,10 @@ func (cache *Cache) TotalSlotsDataMemReleasedToGC() (totalSDMemReleasedToGC uint
 
 func (cache *Cache) addIncrLatencyInNs(count int64) {
 	atomic.AddUint64(&cache.incrTimeTakenInNs, uint64(count))
+}
+
+func (cache *Cache) incrINCRReqCount(count uint64) {
+	atomic.AddUint64(&cache.incrReqCount, count)
 }
 
 func elapsedTimeInNanos(beginTimeNs int64) int64 {
@@ -452,6 +462,7 @@ func (cache *Cache) Clear() {
 	}
 
 	cache.incrTimeTakenInNs = 0
+	cache.incrReqCount = 0
 }
 
 // ResetStatistics refreshes the current state of the statistics.
@@ -463,4 +474,5 @@ func (cache *Cache) ResetStatistics() {
 	}
 
 	cache.incrTimeTakenInNs = 0
+	cache.incrReqCount = 0
 }
