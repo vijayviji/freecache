@@ -244,10 +244,18 @@ func (cache *Cache) IncrValueInt(key []byte, valueType string, expireSeconds int
 	return valueNum, err
 }
 
-// EvacuateCount is a metric indicating the number of times an eviction occurred.
-func (cache *Cache) EvacuateCount() (count int64) {
+// RbRelogCount is a metric indicating the number of times an relogging happened in Ring buffer.
+func (cache *Cache) EvacuateCount() (count uint64) {
 	for i := range cache.segments {
-		count += atomic.LoadInt64(&cache.segments[i].totalEvacuate)
+		count += atomic.LoadUint64(&cache.segments[i].nEvacuateOpCount)
+	}
+	return
+}
+
+// RbRelogCount is a metric indicating the number of times an relogging happened in Ring buffer.
+func (cache *Cache) RbRelogCount() (count int64) {
+	for i := range cache.segments {
+		count += atomic.LoadInt64(&cache.segments[i].totalRbEvacuate)
 	}
 	return
 }
@@ -391,7 +399,8 @@ func (cache *Cache) GetSegmentStats(m *map[string]uint64, index int) {
 		return
 	}
 
-	(*m)["segment" + string(index) + ".nEvacuates"] = uint64(atomic.LoadInt64(&cache.segments[index].totalEvacuate))
+	(*m)["segment" + string(index) + ".nRbRelogs"] = uint64(atomic.LoadInt64(&cache.segments[index].totalRbEvacuate))
+	(*m)["segment" + string(index) + ".nEvacauteOps"] = atomic.LoadUint64(&cache.segments[index].nEvacuateOpCount)
 	(*m)["segment" + string(index) + ".nExpires"] = uint64(atomic.LoadInt64(&cache.segments[index].totalExpired))
 	(*m)["segment" + string(index) + ".nEntries"] = uint64(atomic.LoadInt64(&cache.segments[index].entryCount))
 	(*m)["segment" + string(index) + ".nSlotsDataExpands"] = uint64(atomic.LoadUint64(&cache.segments[index].nSDExpands))

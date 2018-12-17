@@ -48,11 +48,12 @@ type segment struct {
 	entryCount    int64
 	totalCount    int64 // number of entries in ring buffer, including deleted entries.
 	totalTime     int64 // used to calculate least recent used entry.
-	totalEvacuate int64 // total evacuates in this segment from last reset
+	totalRbEvacuate int64 // total evacuates in this segment from last reset
 	totalExpired  int64 // used for debug
 	overwrites    int64 // used for debug
 
 	// additional stats by Viji
+	nEvacuateOpCount	   uint64  // total number of evacuate operations happened
 	nSDExpands             uint64 // total slots data expands in this segment from last reset
 	nSets                  uint64 // total sets in this segment from last reset
 	totalSetTimeNs         uint64 // total time taken for sets in this segment in nanoseconds from last reset
@@ -227,12 +228,13 @@ func (seg *segment) evacuate(entryLen int64, slotId uint8, now uint32) (slotModi
 			newOff := seg.rb.Evacuate(oldOff, int(oldEntryLen))
 			seg.updateEntryPtr(oldHdr.slotId, oldHdr.hash16, oldOff, newOff)
 			consecutiveEvacuate++
-			atomic.AddInt64(&seg.totalEvacuate, 1)
+			evacuationOccurred = true
+			atomic.AddInt64(&seg.totalRbEvacuate, 1)
 		}
-		evacuationOccurred = true
 	}
 
 	if evacuationOccurred {
+		atomic.AddUint64(&seg.nEvacuateOpCount, 1)
 		atomic.AddUint64(&seg.totalEvacuateTimeNs, uint64(getElapsedTimeNS(startTimeNS)))
 	}
 
@@ -430,12 +432,13 @@ func (seg *segment) lookupByOff(slot []entryPtr, hash16 uint16, offset int64) (i
 }
 
 func (seg *segment) resetStatistics() {
-	atomic.StoreInt64(&seg.totalEvacuate, 0)
+	atomic.StoreInt64(&seg.totalRbEvacuate, 0)
 	atomic.StoreInt64(&seg.totalExpired, 0)
 	atomic.StoreInt64(&seg.overwrites, 0)
 	atomic.StoreInt64(&seg.hitCount, 0)
 	atomic.StoreInt64(&seg.missCount, 0)
 
+	atomic.StoreUint64(&seg.nEvacuateOpCount, 0)
 	atomic.StoreUint64(&seg.nSDExpands, 0)
 	atomic.StoreUint64(&seg.nSets, 0)
 	atomic.StoreUint64(&seg.totalSetTimeNs, 0)

@@ -161,11 +161,11 @@ func TestFreeCache(t *testing.T) {
 	}
 
 	t.Logf("hit rate is %v, evacuates %v, entries %v, average time %v, expire count %v\n",
-		cache.HitRate(), cache.EvacuateCount(), cache.EntryCount(), cache.AverageAccessTime(), cache.ExpiredCount())
+		cache.HitRate(), cache.RbRelogCount(), cache.EntryCount(), cache.AverageAccessTime(), cache.ExpiredCount())
 
 	cache.ResetStatistics()
 	t.Logf("hit rate is %v, evacuates %v, entries %v, average time %v, expire count %v\n",
-		cache.HitRate(), cache.EvacuateCount(), cache.EntryCount(), cache.AverageAccessTime(), cache.ExpiredCount())
+		cache.HitRate(), cache.RbRelogCount(), cache.EntryCount(), cache.AverageAccessTime(), cache.ExpiredCount())
 }
 
 func TestOverwrite(t *testing.T) {
@@ -534,7 +534,7 @@ func TestRace(t *testing.T) {
 	evacFunc := func() {
 		var i int64
 		for i = 0; i < iters; i++ {
-			_ = cache.EvacuateCount()
+			_ = cache.RbRelogCount()
 			_ = cache.ExpiredCount()
 			_ = cache.EntryCount()
 			_ = cache.AverageAccessTime()
